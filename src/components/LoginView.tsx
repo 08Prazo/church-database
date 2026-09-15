@@ -16,7 +16,12 @@ export const LoginView: React.FC = () => {
     } catch (err: any) {
       console.error('Sign-in error:', err);
       // Suppress popup-closed-by-user error unless it's a real failure
-      if (err?.code !== 'auth/popup-closed-by-user') {
+      if (err?.code === 'auth/unauthorized-domain') {
+        const currentDomain = typeof window !== 'undefined' ? window.location.hostname : 'your-site.netlify.app';
+        setError(
+          `Domain authorization required: "${currentDomain}" must be added to your Firebase Authorized Domains list. In Firebase Console, go to Authentication > Settings > Authorized domains and add "${currentDomain}".`
+        );
+      } else if (err?.code !== 'auth/popup-closed-by-user') {
         setError(err?.message || 'Failed to sign in with Google. Please try again.');
       }
     } finally {
