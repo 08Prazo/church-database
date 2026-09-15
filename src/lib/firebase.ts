@@ -14,13 +14,54 @@ const fallbackConfig = {
   messagingSenderId: '1068026986772',
 };
 
+// Safe lookup for environment variables in both browser and bundler environments
+const getEnvVar = (viteKey: string, processKey?: string): string => {
+  const viteVal = (import.meta.env as any)?.[viteKey];
+  if (viteVal && typeof viteVal === 'string' && viteVal.trim() !== '') {
+    return viteVal.trim();
+  }
+  if (processKey && typeof process !== 'undefined' && process.env) {
+    const procVal = process.env[processKey];
+    if (procVal && typeof procVal === 'string' && procVal.trim() !== '') {
+      return procVal.trim();
+    }
+  }
+  return '';
+};
+
+// Flexible API key resolution supporting standard Netlify environment variables:
+// - VITE_FIREBASE_API_KEY
+// - FIREBASE_API_KEY
+// - VITE_API_KEY
+// - API_KEY
+const resolvedApiKey =
+  getEnvVar('VITE_FIREBASE_API_KEY', 'FIREBASE_API_KEY') ||
+  getEnvVar('VITE_API_KEY', 'API_KEY') ||
+  appletConfig?.apiKey ||
+  fallbackConfig.apiKey;
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || appletConfig?.apiKey || fallbackConfig.apiKey,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || appletConfig?.authDomain || fallbackConfig.authDomain,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || appletConfig?.projectId || fallbackConfig.projectId,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || appletConfig?.storageBucket || fallbackConfig.storageBucket,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || appletConfig?.messagingSenderId || fallbackConfig.messagingSenderId,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || appletConfig?.appId || fallbackConfig.appId,
+  apiKey: resolvedApiKey,
+  authDomain:
+    getEnvVar('VITE_FIREBASE_AUTH_DOMAIN', 'FIREBASE_AUTH_DOMAIN') ||
+    appletConfig?.authDomain ||
+    fallbackConfig.authDomain,
+  projectId:
+    getEnvVar('VITE_FIREBASE_PROJECT_ID', 'FIREBASE_PROJECT_ID') ||
+    appletConfig?.projectId ||
+    fallbackConfig.projectId,
+  storageBucket:
+    getEnvVar('VITE_FIREBASE_STORAGE_BUCKET', 'FIREBASE_STORAGE_BUCKET') ||
+    appletConfig?.storageBucket ||
+    fallbackConfig.storageBucket,
+  messagingSenderId:
+    getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID', 'FIREBASE_MESSAGING_SENDER_ID') ||
+    appletConfig?.messagingSenderId ||
+    fallbackConfig.messagingSenderId,
+  appId:
+    getEnvVar('VITE_FIREBASE_APP_ID', 'FIREBASE_APP_ID') ||
+    appletConfig?.appId ||
+    fallbackConfig.appId,
 };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
@@ -32,7 +73,7 @@ googleProvider.setCustomParameters({
 });
 
 const databaseId =
-  import.meta.env.VITE_FIREBASE_DATABASE_ID ||
+  getEnvVar('VITE_FIREBASE_DATABASE_ID', 'FIREBASE_DATABASE_ID') ||
   appletConfig?.firestoreDatabaseId ||
   fallbackConfig.firestoreDatabaseId ||
   '(default)';
