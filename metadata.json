@@ -1,0 +1,6 @@
+{
+  "name": "New Souls Database",
+  "description": "A clean, production-ready database for The New Brook Church to track and manage new souls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
