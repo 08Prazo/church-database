@@ -17,7 +17,7 @@ export const LoginView: React.FC = () => {
       console.error('Sign-in error:', err);
       // Suppress popup-closed-by-user error unless it's a real failure
       if (err?.code === 'auth/unauthorized-domain') {
-        const currentDomain = typeof window !== 'undefined' ? window.location.hostname : 'your-site.netlify.app';
+        const currentDomain = typeof window !== 'undefined' ? window.location.hostname : 'your-site.vercel.app';
         setError(
           `Domain authorization required: "${currentDomain}" must be added to your Firebase Authorized Domains list. In Firebase Console, go to Authentication > Settings > Authorized domains and add "${currentDomain}".`
         );
