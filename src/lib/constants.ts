@@ -1,9 +1,13 @@
-export const CHURCH_BRANDING = {
-  name: 'The NewBrook',
-  subtitle: '...reinforcing your identity',
-  databaseTitle: 'New Souls Database',
-  // Official photo link provided by the church
-  photoUrl: 'https://photos.google.com/photo/AF1QipMtw0dMqyHTJHI-6u2Jk5nBAGbLx04NkUodtd0',
-  // Fallback high-resolution logo asset
-  fallbackLogoUrl: '/the-newbrook-logo.jpg',
-};
+import { SoulStatus } from '../types';
+
+export const INITIAL_SUPER_ADMIN_EMAIL = 'adekoyapraise08@gmail.com';
+
+export const SOUL_STATUSES: SoulStatus[] = [
+  'New',
+  'Contacted',
+  'Follow-up',
+  'Joined Church'
+];
+
+export const CHURCH_NAME = 'The New Brook Church';
+export const APP_NAME = 'New Souls Database';

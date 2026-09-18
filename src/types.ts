@@ -5,19 +5,26 @@ export interface Soul {
   fullName: string;
   phoneNumber: string;
   location: string;
-  date: string;
+  date: string; // YYYY-MM-DD
   status: SoulStatus;
   createdByUid: string;
   createdByEmail: string;
-  createdAt?: any;
-  updatedAt?: any;
+  createdByName: string;
+  createdAt: number;
 }
 
 export type UserRole = 'user' | 'admin' | 'super_admin';
 
-export interface AdminRecord {
+export interface AdminUser {
   email: string;
   role: 'admin' | 'super_admin';
-  addedBy?: string;
-  addedAt?: any;
+  assignedBy?: string;
+  assignedAt?: number;
+}
+
+export interface AppUser {
+  uid: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
 }

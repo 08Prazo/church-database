@@ -1,130 +1,60 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Search,
   Plus,
   Filter,
-  Phone,
+  UserPlus,
   MapPin,
   Calendar,
-  Edit2,
-  Trash2,
-  Loader2,
-  Users,
-  UserCheck,
-  CheckCircle2,
+  Phone,
+  User,
+  Shield,
   Clock,
-  UserPlus,
-  ExternalLink,
+  MoreVertical,
+  CheckCircle2,
+  ChevronRight,
+  SlidersHorizontal,
+  X
 } from 'lucide-react';
-import {
-  collection,
-  query,
-  where,
-  onSnapshot,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  serverTimestamp,
-} from 'firebase/firestore';
-import { db } from '../lib/firebase';
-import { useAuth } from '../context/AuthContext';
 import { Soul, SoulStatus } from '../types';
+import { SOUL_STATUSES } from '../lib/constants';
 import { StatusBadge } from './StatusBadge';
-import { SoulModal } from './SoulModal';
+import { AddSoulModal } from './AddSoulModal';
+import { EditSoulModal } from './EditSoulModal';
+import { AdminManagementSection } from './AdminManagementSection';
+import { useAuth } from '../context/AuthContext';
+import { addSoul, updateSoul, deleteSoul } from '../lib/database';
 
 interface SoulsDashboardProps {
-  onOpenAdminManagement?: () => void;
+  mode: 'my_souls' | 'admin_dashboard';
+  souls: Soul[];
 }
 
-export const SoulsDashboard: React.FC<SoulsDashboardProps> = () => {
-  const { user, isAdmin, isSuperAdmin, role } = useAuth();
-  const [souls, setSouls] = useState<Soul[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  // Filters
+export const SoulsDashboard: React.FC<SoulsDashboardProps> = ({ mode, souls }) => {
+  const { user, isSuperAdmin } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [viewScope, setViewScope] = useState<'all' | 'mine'>('all');
-
-  // Modal states
-  const [isSoulModalOpen, setIsSoulModalOpen] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingSoul, setEditingSoul] = useState<Soul | null>(null);
-  const [soulToDelete, setSoulToDelete] = useState<Soul | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [showAdminManagement, setShowAdminManagement] = useState(false);
 
-  useEffect(() => {
-    if (!user) return;
-    setLoading(true);
-
-    let q;
-    if (isAdmin && viewScope === 'all') {
-      // Admins and Super Admins can see all souls
-      q = collection(db, 'souls');
-    } else {
-      // Regular users (or admin viewing only their own) query solely their own created souls
-      q = query(collection(db, 'souls'), where('createdByUid', '==', user.uid));
-    }
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const items: Soul[] = [];
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          items.push({
-            id: docSnap.id,
-            fullName: data.fullName || '',
-            phoneNumber: data.phoneNumber || '',
-            location: data.location || '',
-            date: data.date || '',
-            status: data.status || 'New',
-            createdByUid: data.createdByUid || '',
-            createdByEmail: data.createdByEmail || '',
-            createdAt: data.createdAt,
-            updatedAt: data.updatedAt,
-          });
-        });
-
-        // Sort by date or createdAt descending
-        items.sort((a, b) => {
-          if (b.date && a.date && b.date !== a.date) {
-            return b.date.localeCompare(a.date);
-          }
-          const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-          const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-          return timeB - timeA;
-        });
-
-        setSouls(items);
-        setLoading(false);
-      },
-      (err) => {
-        console.error('Error fetching souls:', err);
-        setLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [user, isAdmin, viewScope]);
-
-  // Filtered souls list
+  // Filter souls by name and status
   const filteredSouls = useMemo(() => {
-    return souls.filter((s) => {
-      const matchSearch =
+    return souls.filter((soul) => {
+      const matchesSearch =
         !searchTerm.trim() ||
-        s.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.phoneNumber.includes(searchTerm);
+        soul.fullName.toLowerCase().includes(searchTerm.toLowerCase().trim()) ||
+        soul.location.toLowerCase().includes(searchTerm.toLowerCase().trim()) ||
+        soul.phoneNumber.includes(searchTerm.trim());
 
-      const matchStatus =
-        statusFilter === 'ALL' || s.status.toLowerCase() === statusFilter.toLowerCase();
+      const matchesStatus =
+        selectedStatus === 'all' || soul.status === selectedStatus;
 
-      return matchSearch && matchStatus;
+      return matchesSearch && matchesStatus;
     });
-  }, [souls, searchTerm, statusFilter]);
+  }, [souls, searchTerm, selectedStatus]);
 
-  const handleSaveSoul = async (data: {
+  const handleAddSoul = async (data: {
     fullName: string;
     phoneNumber: string;
     location: string;
@@ -132,356 +62,302 @@ export const SoulsDashboard: React.FC<SoulsDashboardProps> = () => {
     status: SoulStatus;
   }) => {
     if (!user) return;
-
-    if (editingSoul) {
-      const docRef = doc(db, 'souls', editingSoul.id);
-      await updateDoc(docRef, {
-        ...data,
-        updatedAt: serverTimestamp(),
-      });
-    } else {
-      await addDoc(collection(db, 'souls'), {
-        ...data,
-        createdByUid: user.uid,
-        createdByEmail: user.email || '',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    }
+    await addSoul({
+      ...data,
+      createdByUid: user.uid,
+      createdByEmail: user.email,
+      createdByName: user.displayName || user.email.split('@')[0]
+    });
   };
 
-  const handleDeleteSoul = async () => {
-    if (!soulToDelete) return;
-    try {
-      setIsDeleting(true);
-      await deleteDoc(doc(db, 'souls', soulToDelete.id));
-      setSoulToDelete(null);
-    } catch (err) {
-      console.error('Failed to delete soul:', err);
-    } finally {
-      setIsDeleting(false);
-    }
+  const handleUpdateSoul = async (id: string, updates: Partial<Soul>) => {
+    await updateSoul(id, updates);
   };
+
+  const handleDeleteSoul = async (id: string) => {
+    await deleteSoul(id);
+  };
+
+  const isAdminView = mode === 'admin_dashboard';
 
   return (
-    <div id="souls-dashboard-view" className="space-y-6">
-      {/* Top Header & Add Action */}
+    <div className="space-y-6">
+      {/* View Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1 id="page-title-new-souls" className="text-2xl font-bold tracking-tight text-slate-900">
-              New Souls
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+              {isAdminView ? 'Admin Dashboard' : 'New Souls'}
             </h1>
-            {isAdmin && (
-              <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                {isSuperAdmin ? 'Super Admin Mode' : 'Admin Mode'}
+            {isAdminView && (
+              <span className="px-2.5 py-0.5 text-xs font-semibold bg-slate-900 text-white rounded-full">
+                All Records ({souls.length})
               </span>
             )}
           </div>
-          <p className="text-sm text-slate-500 mt-1">
-            {isAdmin && viewScope === 'all'
-              ? 'Church-wide directory of all souls recorded across The New Brook Church.'
-              : 'Records of souls you have personally added for follow-up and discipleship.'}
+          <p className="text-xs text-slate-500 mt-1">
+            {isAdminView
+              ? 'Viewing and managing all souls recorded across The New Brook Church'
+              : 'Keep track of all the new souls you personally recorded'}
           </p>
         </div>
 
-        <button
-          id="btn-add-new-soul"
-          type="button"
-          onClick={() => {
-            setEditingSoul(null);
-            setIsSoulModalOpen(true);
-          }}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium rounded-lg transition shadow-xs whitespace-nowrap"
-        >
-          <Plus className="w-4 h-4" />
-          <span>+ Add New Soul</span>
-        </button>
+        <div className="flex items-center gap-2.5">
+          {isAdminView && isSuperAdmin && (
+            <button
+              type="button"
+              onClick={() => setShowAdminManagement(!showAdminManagement)}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl border transition shadow-2xs ${
+                showAdminManagement
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>{showAdminManagement ? 'Hide Admin Controls' : 'Manage Admins'}</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setIsAddModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition shadow-xs"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add New Soul</span>
+          </button>
+        </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
-          {/* Search by Name */}
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              id="search-soul-name-input"
-              type="text"
-              placeholder="Search by name, location, or phone..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-800 focus:border-slate-800 transition"
-            />
-          </div>
+      {/* Embedded Super Admin Management Section (Inside Admin Dashboard) */}
+      {isAdminView && isSuperAdmin && showAdminManagement && (
+        <AdminManagementSection />
+      )}
 
-          {/* Status Filter */}
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-slate-400 shrink-0 hidden sm:block" />
-            <select
-              id="status-filter-select"
-              aria-label="Filter souls by status"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 text-sm bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-800 focus:border-slate-800 text-slate-700 transition"
+      {/* Search & Filter Toolbar */}
+      <div className="p-3 bg-white border border-slate-200/90 rounded-2xl shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        {/* Search */}
+        <div className="relative flex-1">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by name, phone, or location..."
+            className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-slate-900/10 focus:border-slate-800 transition"
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
             >
-              <option value="ALL">All Statuses</option>
-              <option value="New">New</option>
-              <option value="Contacted">Contacted</option>
-              <option value="Follow-up">Follow-up</option>
-              <option value="Joined Church">Joined Church</option>
-            </select>
-          </div>
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
-        {/* View Scope (Only visible to Admins / Super Admins) */}
-        {isAdmin && (
-          <div className="flex items-center rounded-lg border border-slate-200 p-0.5 bg-slate-50 self-start md:self-auto shrink-0">
-            <button
-              id="btn-filter-all-souls"
-              type="button"
-              onClick={() => setViewScope('all')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition ${
-                viewScope === 'all'
-                  ? 'bg-white text-slate-900 shadow-2xs font-semibold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              All Souls
-            </button>
-            <button
-              id="btn-filter-my-souls"
-              type="button"
-              onClick={() => setViewScope('mine')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition ${
-                viewScope === 'mine'
-                  ? 'bg-white text-slate-900 shadow-2xs font-semibold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Added by Me
-            </button>
+        {/* Filter by Status */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium px-1">
+            <Filter className="w-3.5 h-3.5 text-slate-400" />
+            <span>Status:</span>
           </div>
-        )}
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-slate-900/10 focus:border-slate-800 transition"
+          >
+            <option value="all">All Statuses ({souls.length})</option>
+            {SOUL_STATUSES.map((st) => (
+              <option key={st} value={st}>
+                {st} ({souls.filter((s) => s.status === st).length})
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      {/* Database Table or Empty States */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        {loading ? (
-          <div className="p-16 flex flex-col items-center justify-center text-slate-400">
-            <Loader2 className="w-6 h-6 animate-spin mb-2" />
-            <span className="text-sm font-medium">Loading database records...</span>
+      {/* Database Content */}
+      {souls.length === 0 ? (
+        /* Empty State: Completely empty until someone adds a soul */
+        <div
+          id="souls-empty-state"
+          className="p-12 text-center bg-white border border-slate-200/90 rounded-2xl shadow-2xs space-y-4"
+        >
+          <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto text-slate-600">
+            <UserPlus className="w-6 h-6" />
           </div>
-        ) : souls.length === 0 ? (
-          /* Completely empty state for new user */
-          <div id="souls-empty-state" className="p-16 text-center">
-            <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3 text-slate-400">
-              <Users className="w-6 h-6" />
-            </div>
-            <h3 id="empty-state-heading" className="text-base font-semibold text-slate-800">
-              No souls recorded yet
+          <div className="max-w-xs mx-auto space-y-1">
+            <h3 className="text-base font-bold text-slate-900">
+              {isAdminView ? 'No Souls in Database' : 'No Souls Added Yet'}
             </h3>
-            <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
-              Your database is completely empty. Record new souls from church services, outreaches, and evangelism visits.
+            <p className="text-xs text-slate-500 leading-relaxed">
+              {isAdminView
+                ? 'There are currently no soul records submitted by any user.'
+                : 'Your personal list is empty. Click "Add New Soul" to record the first soul.'}
             </p>
-            <button
-              id="btn-empty-state-add-soul"
-              type="button"
-              onClick={() => {
-                setEditingSoul(null);
-                setIsSoulModalOpen(true);
-              }}
-              className="mt-5 inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium rounded-lg transition"
-            >
-              <Plus className="w-4 h-4" />
-              <span>+ Add New Soul</span>
-            </button>
           </div>
-        ) : filteredSouls.length === 0 ? (
-          /* Filter/search mismatch state */
-          <div id="souls-search-empty-state" className="p-12 text-center">
-            <p className="text-sm font-medium text-slate-700">No souls match your search or filter</p>
-            <p className="text-xs text-slate-500 mt-1">
-              Try modifying your search term or setting the status filter back to &quot;All Statuses&quot;.
-            </p>
-            <button
-              id="btn-clear-filters"
-              type="button"
-              onClick={() => {
-                setSearchTerm('');
-                setStatusFilter('ALL');
-              }}
-              className="mt-3 text-xs font-medium text-slate-900 underline hover:text-slate-700"
-            >
-              Reset filters
-            </button>
-          </div>
-        ) : (
-          /* Database Table */
-          <div className="overflow-x-auto">
-            <table id="souls-database-table" className="w-full text-left border-collapse">
+          <button
+            type="button"
+            onClick={() => setIsAddModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition shadow-xs"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add New Soul</span>
+          </button>
+        </div>
+      ) : filteredSouls.length === 0 ? (
+        /* Empty Filter State */
+        <div className="p-8 text-center bg-white border border-slate-200/90 rounded-2xl shadow-2xs space-y-2">
+          <p className="text-sm font-semibold text-slate-800">No matching souls found</p>
+          <p className="text-xs text-slate-500">
+            Try adjusting your search query or status filter.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchTerm('');
+              setSelectedStatus('all');
+            }}
+            className="mt-2 text-xs font-medium text-slate-900 underline underline-offset-4"
+          >
+            Clear filters
+          </button>
+        </div>
+      ) : (
+        /* Professional Database Table */
+        <div className="bg-white border border-slate-200/90 rounded-2xl shadow-2xs overflow-hidden">
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50/75 text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                <tr className="border-b border-slate-200 bg-slate-50/75 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
                   <th className="py-3 px-4">Full Name</th>
                   <th className="py-3 px-4">Phone Number</th>
                   <th className="py-3 px-4">Location</th>
                   <th className="py-3 px-4">Date</th>
                   <th className="py-3 px-4">Status</th>
-                  {isAdmin && viewScope === 'all' && (
-                    <th className="py-3 px-4">Added By</th>
-                  )}
+                  {isAdminView && <th className="py-3 px-4">Added By</th>}
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-sm">
-                {filteredSouls.map((soul) => {
-                  const isOwner = soul.createdByUid === user?.uid;
-                  const canManage = isOwner || isAdmin;
-
-                  return (
-                    <tr
-                      key={soul.id}
-                      id={`soul-row-${soul.id}`}
-                      className="hover:bg-slate-50/70 transition-colors"
-                    >
-                      {/* Name */}
-                      <td className="py-3.5 px-4 font-medium text-slate-900">
-                        {soul.fullName}
-                      </td>
-
-                      {/* Phone */}
-                      <td className="py-3.5 px-4 text-slate-600">
-                        <a
-                          id={`phone-link-${soul.id}`}
-                          href={`tel:${soul.phoneNumber}`}
-                          className="inline-flex items-center gap-1.5 hover:text-slate-900 transition hover:underline"
-                        >
-                          <Phone className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{soul.phoneNumber}</span>
-                        </a>
-                      </td>
-
-                      {/* Location */}
-                      <td className="py-3.5 px-4 text-slate-600">
-                        <span className="inline-flex items-center gap-1.5">
-                          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span className="truncate max-w-xs">{soul.location}</span>
+              <tbody className="divide-y divide-slate-100">
+                {filteredSouls.map((soul) => (
+                  <tr
+                    key={soul.id}
+                    className="hover:bg-slate-50/70 transition-colors group cursor-pointer"
+                    onClick={() => setEditingSoul(soul)}
+                  >
+                    <td className="py-3.5 px-4 font-semibold text-slate-900">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs uppercase">
+                          {soul.fullName.charAt(0)}
+                        </div>
+                        <span>{soul.fullName}</span>
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-4 text-slate-600 font-mono">
+                      {soul.phoneNumber}
+                    </td>
+                    <td className="py-3.5 px-4 text-slate-600">
+                      <span className="inline-flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-slate-400" />
+                        <span>{soul.location}</span>
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap">
+                      {soul.date}
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <StatusBadge status={soul.status} size="sm" />
+                    </td>
+                    {isAdminView && (
+                      <td className="py-3.5 px-4 text-slate-500 text-[11px]">
+                        <span className="font-medium text-slate-700 block truncate max-w-[140px]">
+                          {soul.createdByName || soul.createdByEmail}
+                        </span>
+                        <span className="text-slate-400 truncate max-w-[140px] block">
+                          {soul.createdByEmail}
                         </span>
                       </td>
-
-                      {/* Date */}
-                      <td className="py-3.5 px-4 text-slate-600 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1.5 text-xs">
-                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{soul.date}</span>
-                        </span>
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-3.5 px-4">
-                        <StatusBadge status={soul.status} />
-                      </td>
-
-                      {/* Added By (for Admin view) */}
-                      {isAdmin && viewScope === 'all' && (
-                        <td className="py-3.5 px-4 text-xs text-slate-500">
-                          <span className="truncate block max-w-[160px]" title={soul.createdByEmail}>
-                            {soul.createdByEmail || 'Unknown'}
-                          </span>
-                        </td>
-                      )}
-
-                      {/* Actions */}
-                      <td className="py-3.5 px-4 text-right">
-                        {canManage && (
-                          <div className="inline-flex items-center gap-1 justify-end">
-                            <button
-                              id={`btn-edit-soul-${soul.id}`}
-                              type="button"
-                              onClick={() => {
-                                setEditingSoul(soul);
-                                setIsSoulModalOpen(true);
-                              }}
-                              title="Edit Record"
-                              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              id={`btn-delete-soul-${soul.id}`}
-                              type="button"
-                              onClick={() => setSoulToDelete(soul)}
-                              title="Delete Record"
-                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                    )}
+                    <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => setEditingSoul(soul)}
+                        className="px-2.5 py-1 text-xs font-medium text-slate-700 hover:text-slate-900 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg transition"
+                      >
+                        Manage
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
-        )}
-      </div>
 
-      {/* Add / Edit Soul Modal */}
-      <SoulModal
-        isOpen={isSoulModalOpen}
-        onClose={() => {
-          setIsSoulModalOpen(false);
-          setEditingSoul(null);
-        }}
-        onSave={handleSaveSoul}
-        initialSoul={editingSoul}
-      />
-
-      {/* Delete Confirmation Modal */}
-      {soulToDelete && (
-        <div
-          id="delete-soul-modal-backdrop"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs"
-        >
-          <div
-            id="delete-soul-modal"
-            className="w-full max-w-sm bg-white rounded-xl shadow-xl border border-slate-200 p-6"
-          >
-            <h4 id="delete-soul-modal-title" className="text-base font-semibold text-slate-900">
-              Delete Soul Record?
-            </h4>
-            <p className="text-sm text-slate-600 mt-2">
-              Are you sure you want to permanently delete the record for{' '}
-              <span className="font-semibold text-slate-900">{soulToDelete.fullName}</span>?
-              This action cannot be undone.
-            </p>
-
-            <div className="mt-6 flex items-center justify-end gap-3">
-              <button
-                id="btn-cancel-delete-soul"
-                type="button"
-                onClick={() => setSoulToDelete(null)}
-                disabled={isDeleting}
-                className="px-3.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition"
+          {/* Mobile Card View */}
+          <div className="md:hidden divide-y divide-slate-100">
+            {filteredSouls.map((soul) => (
+              <div
+                key={soul.id}
+                onClick={() => setEditingSoul(soul)}
+                className="p-4 space-y-3 hover:bg-slate-50/70 transition cursor-pointer"
               >
-                Cancel
-              </button>
-              <button
-                id="btn-confirm-delete-soul"
-                type="button"
-                onClick={handleDeleteSoul}
-                disabled={isDeleting}
-                className="px-3.5 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition flex items-center gap-2"
-              >
-                {isDeleting && <Loader2 className="w-4 h-4 animate-spin" />}
-                Delete Record
-              </button>
-            </div>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">{soul.fullName}</h3>
+                    <p className="text-xs text-slate-500 font-mono mt-0.5">{soul.phoneNumber}</p>
+                  </div>
+                  <StatusBadge status={soul.status} size="sm" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs text-slate-500 pt-1 border-t border-slate-50">
+                  <div className="flex items-center gap-1 truncate">
+                    <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                    <span className="truncate">{soul.location}</span>
+                  </div>
+                  <div className="flex items-center gap-1 justify-end">
+                    <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                    <span>{soul.date}</span>
+                  </div>
+                </div>
+
+                {isAdminView && (
+                  <div className="text-[11px] text-slate-400 pt-1">
+                    Added by: <span className="font-medium text-slate-600">{soul.createdByEmail}</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Footer stats count */}
+          <div className="p-3 bg-slate-50/80 border-t border-slate-200/80 text-xs text-slate-500 flex items-center justify-between">
+            <span>
+              Showing {filteredSouls.length} of {souls.length} record{souls.length === 1 ? '' : 's'}
+            </span>
           </div>
         </div>
       )}
+
+      {/* Add Soul Modal */}
+      <AddSoulModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onAdd={handleAddSoul}
+      />
+
+      {/* Edit / Manage Soul Modal */}
+      <EditSoulModal
+        soul={editingSoul}
+        isOpen={!!editingSoul}
+        onClose={() => setEditingSoul(null)}
+        onUpdate={handleUpdateSoul}
+        onDelete={handleDeleteSoul}
+        canDelete={true}
+      />
     </div>
   );
 };

@@ -1,157 +1,160 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import {
-  User,
-  signInWithPopup,
-  signOut as fbSignOut,
-  onAuthStateChanged,
-} from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
-import { auth, googleProvider, db } from '../lib/firebase';
-import { UserRole } from '../types';
+import { onAuthStateChanged, signInWithPopup, signOut as firebaseSignOut, User } from 'firebase/auth';
+import { auth, googleProvider } from '../lib/firebase';
+import { AppUser, UserRole } from '../types';
+import { determineUserRole } from '../lib/database';
+import { INITIAL_SUPER_ADMIN_EMAIL } from '../lib/constants';
 
 interface AuthContextType {
-  user: User | null;
+  user: AppUser | null;
   loading: boolean;
-  role: UserRole;
-  isAdmin: boolean;
-  isSuperAdmin: boolean;
   signInWithGoogle: () => Promise<void>;
-  signOutUser: () => Promise<void>;
+  signInWithGmailAddress: (email: string, displayName?: string) => Promise<void>;
+  signOut: () => Promise<void>;
+  refreshRole: () => Promise<void>;
+  isSuperAdmin: boolean;
+  isAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [role, setRole] = useState<UserRole>('user');
+const LOCAL_SESSION_USER_KEY = 'new_brook_session_user';
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  // Helper to construct AppUser from email & uid
+  const buildAppUser = async (email: string, uid: string, displayName?: string): Promise<AppUser> => {
+    const role: UserRole = await determineUserRole(email);
+    return {
+      uid,
+      email: email.toLowerCase(),
+      displayName: displayName || email.split('@')[0],
+      role
+    };
+  };
 
   useEffect(() => {
-    let unsubscribeRoleDoc: (() => void) | null = null;
-
-    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-
-      if (unsubscribeRoleDoc) {
-        unsubscribeRoleDoc();
-        unsubscribeRoleDoc = null;
+    // 1. Check local session storage first for quick restore
+    try {
+      const stored = localStorage.getItem(LOCAL_SESSION_USER_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as AppUser;
+        // Verify role
+        determineUserRole(parsed.email).then((role) => {
+          setUser({ ...parsed, role });
+          setLoading(false);
+        }).catch(() => {
+          setUser(parsed);
+          setLoading(false);
+        });
       }
+    } catch {
+      // Ignore
+    }
 
-      if (!currentUser || !currentUser.email) {
-        setRole('user');
-        setLoading(false);
-        return;
-      }
+    // 2. Firebase Auth listener
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
 
-      const emailNormalized = currentUser.email.toLowerCase();
-
-      try {
-        const adminDocRef = doc(db, 'admins', emailNormalized);
-
-        // Check if system has been bootstrapped; if not, first user can bootstrap as super admin
-        const bootstrapRef = doc(db, 'system', 'bootstrap');
-        const bootstrapSnap = await getDoc(bootstrapRef);
-        if (!bootstrapSnap.exists()) {
-          try {
-            await setDoc(adminDocRef, {
-              email: emailNormalized,
-              role: 'super_admin',
-              addedBy: 'Initial Setup',
-              addedAt: serverTimestamp(),
-            });
-            await setDoc(bootstrapRef, {
-              bootstrappedBy: emailNormalized,
-              bootstrappedAt: serverTimestamp(),
-            });
-            setRole('super_admin');
-            setLoading(false);
-          } catch (initErr) {
-            console.warn('Bootstrap initialization notice:', initErr);
-          }
-        }
-
-        // Check role in Firestore admins collection with real-time listener
-        unsubscribeRoleDoc = onSnapshot(
-          adminDocRef,
-          (docSnap) => {
-            if (docSnap.exists()) {
-              const data = docSnap.data();
-              if (data.role === 'super_admin') {
-                setRole('super_admin');
-              } else if (data.role === 'admin') {
-                setRole('admin');
-              } else {
-                setRole('user');
-              }
-            } else {
-              setRole('user');
-            }
-            setLoading(false);
-          },
-          (err) => {
-            console.warn('Role snapshot listener error:', err);
-            setRole('user');
-            setLoading(false);
-          }
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser: User | null) => {
+      if (fbUser && fbUser.email) {
+        const appUser = await buildAppUser(
+          fbUser.email,
+          fbUser.uid,
+          fbUser.displayName || undefined
         );
-      } catch (err) {
-        console.error('Failed to setup role listener:', err);
-        setRole('user');
-        setLoading(false);
+        setUser(appUser);
+        localStorage.setItem(LOCAL_SESSION_USER_KEY, JSON.stringify(appUser));
+      } else {
+        // If not logged in via Firebase Auth, keep local session if present, otherwise null
+        const stored = localStorage.getItem(LOCAL_SESSION_USER_KEY);
+        if (!stored) {
+          setUser(null);
+        }
       }
+      setLoading(false);
     });
 
-    return () => {
-      unsubscribeAuth();
-      if (unsubscribeRoleDoc) {
-        unsubscribeRoleDoc();
-      }
-    };
+    return () => unsubscribe();
   }, []);
 
   const signInWithGoogle = async () => {
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (error: any) {
-      console.error('Google Sign-in failed:', error);
-      throw error;
+    if (!auth || !googleProvider) {
+      throw new Error('Google Authentication is initializing. Please try the Gmail address login below.');
+    }
+    const result = await signInWithPopup(auth, googleProvider);
+    if (result.user && result.user.email) {
+      const appUser = await buildAppUser(
+        result.user.email,
+        result.user.uid,
+        result.user.displayName || undefined
+      );
+      setUser(appUser);
+      localStorage.setItem(LOCAL_SESSION_USER_KEY, JSON.stringify(appUser));
     }
   };
 
-  const signOutUser = async () => {
+  const signInWithGmailAddress = async (email: string, displayName?: string) => {
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed || !trimmed.includes('@')) {
+      throw new Error('Please enter a valid email address.');
+    }
+    const uid = 'gmail_' + btoa(trimmed).replace(/=/g, '');
+    const appUser = await buildAppUser(trimmed, uid, displayName);
+    setUser(appUser);
+    localStorage.setItem(LOCAL_SESSION_USER_KEY, JSON.stringify(appUser));
+  };
+
+  const signOut = async () => {
     try {
-      await fbSignOut(auth);
-      setRole('user');
-    } catch (error: any) {
-      console.error('Sign-out failed:', error);
-      throw error;
+      if (auth) {
+        await firebaseSignOut(auth);
+      }
+    } catch {
+      // ignore
+    }
+    localStorage.removeItem(LOCAL_SESSION_USER_KEY);
+    setUser(null);
+  };
+
+  const refreshRole = async () => {
+    if (user) {
+      const role = await determineUserRole(user.email);
+      const updated = { ...user, role };
+      setUser(updated);
+      localStorage.setItem(LOCAL_SESSION_USER_KEY, JSON.stringify(updated));
     }
   };
 
-  const isSuperAdmin = role === 'super_admin';
-  const isAdmin = role === 'admin' || role === 'super_admin';
+  const isSuperAdmin = user?.role === 'super_admin' || user?.email.toLowerCase() === INITIAL_SUPER_ADMIN_EMAIL.toLowerCase();
+  const isAdmin = isSuperAdmin || user?.role === 'admin';
 
   return (
     <AuthContext.Provider
       value={{
         user,
         loading,
-        role,
-        isAdmin,
-        isSuperAdmin,
         signInWithGoogle,
-        signOutUser,
+        signInWithGmailAddress,
+        signOut,
+        refreshRole,
+        isSuperAdmin: !!isSuperAdmin,
+        isAdmin: !!isAdmin
       }}
     >
       {children}
     </AuthContext.Provider>
   );
-}
+};
 
-export function useAuth() {
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-}
+};
