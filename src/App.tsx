@@ -5,8 +5,9 @@ import { Navbar } from './components/Navbar';
 import { SoulsDashboard } from './components/SoulsDashboard';
 import { Soul } from './types';
 import { subscribeToSouls } from './lib/database';
-import { Church, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { CHURCH_NAME, APP_NAME } from './lib/constants';
+import { ChurchHelixSvg } from './components/ChurchLogo';
 
 const MainApp: React.FC = () => {
   const { user, loading, isAdmin } = useAuth();
@@ -46,8 +47,8 @@ const MainApp: React.FC = () => {
         id="app-loading"
         className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4"
       >
-        <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-xs mb-3">
-          <Church className="w-6 h-6" />
+        <div className="w-14 h-10 px-1 rounded-2xl bg-white border border-slate-200/90 text-slate-900 flex items-center justify-center shadow-xs mb-3">
+          <ChurchHelixSvg className="w-full h-full p-1" color="#0f172a" />
         </div>
         <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
           <Loader2 className="w-4 h-4 animate-spin text-slate-500" />

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, UserPlus, Calendar, MapPin, Phone, User, CheckCircle2 } from 'lucide-react';
 import { SoulStatus } from '../types';
-import { SOUL_STATUSES } from '../lib/constants';
+import { SOUL_STATUSES, CHURCH_NAME } from '../lib/constants';
 
 interface AddSoulModalProps {
   isOpen: boolean;
@@ -88,7 +88,7 @@ export const AddSoulModal: React.FC<AddSoulModalProps> = ({ isOpen, onClose, onA
             </div>
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Add New Soul</h2>
-              <p className="text-xs text-slate-500">Record a new soul in The New Brook Church database</p>
+              <p className="text-xs text-slate-500">Record a new soul in {CHURCH_NAME} database</p>
             </div>
           </div>
           <button

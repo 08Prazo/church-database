@@ -1,6 +1,6 @@
 {
   "name": "New Souls Database",
-  "description": "A simple and professional New Souls Database for The New Brook Church.",
+  "description": "A simple and professional New Souls Database for The NewBrook (...reinforcing your identity).",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

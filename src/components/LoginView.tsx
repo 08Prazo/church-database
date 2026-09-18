@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Church, Mail, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Mail, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { CHURCH_NAME, APP_NAME, INITIAL_SUPER_ADMIN_EMAIL } from '../lib/constants';
+import { CHURCH_NAME, CHURCH_TAGLINE, APP_NAME, INITIAL_SUPER_ADMIN_EMAIL } from '../lib/constants';
+import { ChurchLogo, ChurchHelixSvg } from './ChurchLogo';
 
 export const LoginView: React.FC = () => {
   const { signInWithGoogle, signInWithGmailAddress } = useAuth();
@@ -68,17 +69,25 @@ export const LoginView: React.FC = () => {
       className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4 sm:p-6 antialiased"
     >
       <div className="w-full max-w-md space-y-6">
-        {/* Brand Header */}
-        <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center mx-auto shadow-xs">
-            <Church className="w-6 h-6" />
+        {/* Brand Header with Church Logo */}
+        <div className="text-center space-y-3">
+          <div className="w-16 h-12 px-1 rounded-2xl bg-white border border-slate-200/90 text-slate-900 flex items-center justify-center mx-auto shadow-xs">
+            <ChurchHelixSvg className="w-full h-full p-1" color="#0f172a" />
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">
-            {CHURCH_NAME}
-          </h1>
-          <p className="text-xs text-slate-500 font-medium">
-            {APP_NAME}
-          </p>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+              {CHURCH_NAME}
+            </h1>
+            <p className="text-xs text-slate-500 font-medium italic">
+              {CHURCH_TAGLINE}
+            </p>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 rounded-full mt-2.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-800" />
+              <span className="text-[11px] font-semibold text-slate-700 tracking-tight">
+                {APP_NAME}
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Login Card */}

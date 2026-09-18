@@ -1,7 +1,8 @@
 import React from 'react';
-import { LogOut, Shield, Users, Church, ChevronDown } from 'lucide-react';
+import { LogOut, Shield, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { CHURCH_NAME, APP_NAME } from '../lib/constants';
+import { CHURCH_NAME, CHURCH_TAGLINE, APP_NAME } from '../lib/constants';
+import { ChurchLogo, ChurchHelixSvg } from './ChurchLogo';
 
 interface NavbarProps {
   currentView: 'my_souls' | 'admin_dashboard';
@@ -42,14 +43,19 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onSelectView }) => 
         <div className="flex items-center justify-between h-16">
           {/* Brand */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-xs">
-              <Church className="w-5 h-5" />
+            <div className="w-11 h-9 px-1 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-xs">
+              <ChurchHelixSvg className="w-full h-full p-0.5" color="#ffffff" />
             </div>
             <div>
-              <span className="text-sm font-bold tracking-tight text-slate-900 block leading-tight">
-                {CHURCH_NAME}
-              </span>
-              <span className="text-xs text-slate-500 font-medium">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-sm font-bold tracking-tight text-slate-900 leading-tight">
+                  {CHURCH_NAME}
+                </span>
+                <span className="text-[10px] text-slate-400 font-medium italic hidden sm:inline">
+                  {CHURCH_TAGLINE}
+                </span>
+              </div>
+              <span className="text-xs text-slate-500 font-medium block">
                 {APP_NAME}
               </span>
             </div>

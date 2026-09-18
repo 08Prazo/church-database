@@ -9,5 +9,6 @@ export const SOUL_STATUSES: SoulStatus[] = [
   'Joined Church'
 ];
 
-export const CHURCH_NAME = 'The New Brook Church';
+export const CHURCH_NAME = 'The NewBrook';
+export const CHURCH_TAGLINE = '...reinforcing your identity';
 export const APP_NAME = 'New Souls Database';

@@ -17,7 +17,7 @@ import {
   X
 } from 'lucide-react';
 import { Soul, SoulStatus } from '../types';
-import { SOUL_STATUSES } from '../lib/constants';
+import { SOUL_STATUSES, CHURCH_NAME } from '../lib/constants';
 import { StatusBadge } from './StatusBadge';
 import { AddSoulModal } from './AddSoulModal';
 import { EditSoulModal } from './EditSoulModal';
@@ -97,7 +97,7 @@ export const SoulsDashboard: React.FC<SoulsDashboardProps> = ({ mode, souls }) =
           </div>
           <p className="text-xs text-slate-500 mt-1">
             {isAdminView
-              ? 'Viewing and managing all souls recorded across The New Brook Church'
+              ? `Viewing and managing all souls recorded across ${CHURCH_NAME}`
               : 'Keep track of all the new souls you personally recorded'}
           </p>
         </div>
